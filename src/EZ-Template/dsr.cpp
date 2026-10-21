@@ -69,11 +69,11 @@ bool correct_from(const SensorInfo& s, double field_heading_deg, double& x, doub
 
   double sensor_heading = wrap_deg(field_heading_deg + side_bearing(s.side));
 
+  // Use the field center as (0, 0); walls are +/- field_in / 2.
   // Nearest cardinal decides the wall: 0 = far (+y), 1 = right (+x),
   // 2 = near (-y), 3 = left (-x).
   int cardinal = (int)std::lround(sensor_heading / 90.0) % 4;
-  double misalign = sensor_heading - cardinal * 90.0;
-  if (misalign > 180.0) misalign -= 360.0;
+  double misalign = wrap180(sensor_heading - cardinal * 90.0);
   if (std::fabs(misalign) > g_tuning.max_misalign_deg) {
     printf("[dsr] %s: skipped, %.1f deg off square\n", side_name(s.side), misalign);
     return false;
@@ -84,11 +84,12 @@ bool correct_from(const SensorInfo& s, double field_heading_deg, double& x, doub
   double d = (mm / 25.4) * std::cos(misalign * M_PI / 180.0) + s.offset_in;
 
   double nx = x, ny = y;
+  const double half_field = g_tuning.field_in / 2.0;
   switch (cardinal) {
-    case 0: ny = g_tuning.field_in - d; break;
-    case 1: nx = g_tuning.field_in - d; break;
-    case 2: ny = d; break;
-    case 3: nx = d; break;
+    case 0: ny = half_field - d; break;
+    case 1: nx = half_field - d; break;
+    case 2: ny = -half_field + d; break;
+    case 3: nx = -half_field + d; break;
   }
 
   double jump = std::fabs(nx - x) + std::fabs(ny - y);
@@ -132,11 +133,12 @@ bool correct(double field_heading_deg, double& x, double& y) {
 double align_heading(double x, double y, double current_deg) {
   if (g_sensors.empty()) return current_deg;
 
+  const double half_field = g_tuning.field_in / 2.0;
   struct { double dist, bearing; } walls[4] = {
-      {g_tuning.field_in - y, 0.0},
-      {g_tuning.field_in - x, 90.0},
-      {y, 180.0},
-      {x, 270.0}};
+      {half_field - y, 0.0},
+      {half_field - x, 90.0},
+      {half_field + y, 180.0},
+      {half_field + x, 270.0}};
   int nearest = 0;
   for (int i = 1; i < 4; i++)
     if (walls[i].dist < walls[nearest].dist) nearest = i;
